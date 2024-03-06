@@ -1,0 +1,159 @@
+-- ⚙️ Required ⚙️ --
+
+
+local Stores = {
+  you = {
+    GameName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name,
+    lplr = game.Players.LocalPlayer,
+		char = game.Players.LocalPlayer.Character,
+		hum = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid"),
+		status = {
+			matchId = 0,
+			inMatch = false,
+			gamemode = "classic",
+			team = nil
+		}
+  },
+  remotes = {
+    shootEvent = game.ReplicatedStorage.Remotes.Shoot,
+		throwStartEvent = game.ReplicatedStorage.Remotes.ThrowStart,
+		throwHitEvent = game.ReplicatedStorage.Remotes.ThrowHit,
+		stabEvent = game.ReplicatedStorage.Remotes.Stab,
+		onPlayerKilled = game.ReplicatedStorage.Remotes.OnPlayerKilled
+  },
+  services = {
+    RunService = game:GetService("RunService")
+  }
+}
+local Functions = {
+	calculateAngleBetweenPositions = function(pos1,pos2)
+		local normal = Vector3.new()
+		if pos1 and pos2 then
+			normal = (pos1-pos2).Unit
+		end
+		return -normal
+	end,
+	getMouseLocation = function()
+		return game:GetService("UserInputService"):GetMouseLocation()
+	end,
+
+	getAllies = function()
+		local teammates = {}
+		if Stores.you.status.inMatch then
+			for _,plr in next,game.Players:GetPlayers() do
+				if plr ~= Stores.you.lplr and plr:GetAttribute("Match") and plr:GetAttribute("Match") == Stores.you.status.matchId and plr.Team == Stores.you.status.team then
+					table.insert(teammates,plr)
+				end
+			end
+		end
+		return teammates
+	end,
+	getTeamStatus = function(plr)
+		if plr ~= Stores.you.lplr and plr:GetAttribute("Match") == Stores.you.status.matchId then
+			if plr.Team ~= Stores.you.status.team then
+				return "Enemy"
+			else
+				return "Ally"
+			end
+		end
+	end,
+
+	getPlayerNearestCursor = function(size)
+		local closest = size
+		local target = nil
+		for _,plr in next,game.Players:GetPlayers() do
+			if plr ~= Stores.you.lplr and plr:GetAttribute("Match") == Stores.you.status.matchId then
+				if plr.Team ~= Stores.you.status.team then
+					if plr.Character and plr.Character:FindFirstChildOfClass("Humanoid").Health > 0 then
+						local vector = workspace.CurrentCamera:WorldToScreenPoint(plr.Character.HumanoidRootPart.Position)
+						if vector then
+							local magnitude = (game:GetService("UserInputService"):GetMouseLocation() - Vector2.new(vector.X,vector.Y)).Magnitude
+							if magnitude <= closest then
+								closest = magnitude
+								target = plr
+							end
+						end
+					end
+				end
+			end
+		end
+		return target
+	end,
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- 💉 Functions 💉 --
+
+
+
+  
+  
+  
+  local silentAim = true
+  local silentAimFOVSize = 100
+  local silentAimFOVVisible = true
+  local silentAimWallbang = false
+  local espRainbow = false
+  
+  local silentAimParams = RaycastParams.new()
+  silentAimParams.RespectCanCollide = true
+  silentAimParams.FilterType = Enum.RaycastFilterType.Exclude
+  local circle = Drawing.new("Circle")
+  circle.Thickness = 3
+  circle.NumSides = 1e9
+  circle.Radius = 100
+  circle.Transparency = 0.3
+  circle.Filled = false
+  circle.Visible = true
+  spawn(function()
+    if espRainbow == true then
+      while true do
+        for hue = 0, 1, 1/30 do
+          local color = Color3.fromHSV(hue, 0.6, 1)
+          circle.Color = color
+          wait(0.15)
+        end
+        wait()
+      end
+    else
+      circle.Color = Color3.new(255,166,181)
+    end
+  end)
+  local silentAimHooker
+  silentAimHooker = hookmetamethod(game, "__namecall", function(self, ...)
+  local args = {...}
+  if silentAim and not checkcaller() and tostring(self) == "Shoot" and getnamecallmethod() == "FireServer" then
+    local resolution = workspace.CurrentCamera.ViewportSize
+    local nearest = Functions.getPlayerNearestCursor(silentAimFOVSize)
+    if nearest then
+      local hitbox = nearest.Character:FindFirstChild('HumanoidRootPart')
+      args[2] = hitbox.CFrame.Position
+      silentAimParams.FilterDescendantsInstances = {Stores.you.char, unpack(Functions.getAllies())}
+      local result = workspace:Raycast(args[1], Functions.calculateAngleBetweenPositions(args[1], hitbox.CFrame.Position) * 9e9, silentAimParams)
+      if result then
+        args[3] = result.Instance
+        args[4] = result.Position
+        if silentAimWallbang then
+          args[3] = hitbox:FindFirstChild("Part")
+          args[4] = hitbox.CFrame.Position
+        end
+      else
+        args[3] = hitbox:FindFirstChild("Part")
+        args[4] = hitbox.CFrame.Position
+      end
+      end
+        return self.FireServer(self,unpack(args))
+      end
+  return silentAimHooker(self,...)
+  end)
